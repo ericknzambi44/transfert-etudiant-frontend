@@ -5,10 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, CheckCircle, XCircle, Clock, ArrowRight, TrendingUp, AlertCircle } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Clock, ArrowRight, TrendingUp, AlertCircle, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { DossierTransfert, StatistiquesDTO } from '@/lib/api.types';
+
+// Composant pour afficher une erreur réseau claire
+const NetworkError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+  <div className="flex flex-col items-center justify-center py-12 text-center">
+    <WifiOff className="h-12 w-12 text-red-500 mb-4" />
+    <p className="text-red-500 mb-2">{message}</p>
+    <Button variant="outline" onClick={onRetry}>Réessayer</Button>
+  </div>
+);
 
 export default function DashboardView() {
   const { auth } = useAuth();
@@ -18,11 +27,13 @@ export default function DashboardView() {
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Pour l'étudiant, on stocke ses dossiers (une fois chargés, on ne les réinitialise pas)
   const [mesDossiers, setMesDossiers] = useState<DossierTransfert[]>([]);
   const [loadingEtudiant, setLoadingEtudiant] = useState<boolean>(true);
   const [errorEtudiant, setErrorEtudiant] = useState<string | null>(null);
-  const studentLoadedRef = useRef(false); // évite de recharger
+  const studentLoadedRef = useRef(false);
+
+  // AbortController pour annuler les requêtes si le composant est démonté
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Chargement pour établissement
   useEffect(() => {
@@ -30,27 +41,34 @@ export default function DashboardView() {
     const fetchData = async () => {
       if (auth.userType !== 'ETABLISSEMENT') return;
       setRefreshing(true);
+      abortControllerRef.current = new AbortController();
       try {
-        const [dossiersData, statsData] = await Promise.all([getDossiers(), getStatistiques()]);
+        const [dossiersData, statsData] = await Promise.all([
+          getDossiers(),
+          getStatistiques(),
+        ]);
         if (mounted) {
           setDossiers(dossiersData);
           setStats(statsData);
           setIsFirstLoad(false);
         }
-      } catch (err) {
-        // géré par le hook error
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.error(err);
       } finally {
         if (mounted) setRefreshing(false);
       }
     };
     fetchData();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      abortControllerRef.current?.abort();
+    };
   }, [auth.userType, getDossiers, getStatistiques]);
 
   // Chargement pour étudiant (une seule fois)
   useEffect(() => {
     if (auth.userType !== 'ETUDIANT') return;
-    if (studentLoadedRef.current) return; // déjà chargé, ne pas recharger
+    if (studentLoadedRef.current) return;
     let mounted = true;
     const fetchEtudiant = async () => {
       setLoadingEtudiant(true);
@@ -62,7 +80,7 @@ export default function DashboardView() {
           studentLoadedRef.current = true;
         }
       } catch (err: any) {
-        if (mounted) setErrorEtudiant(err.message);
+        if (mounted) setErrorEtudiant(err.message || 'Erreur de connexion');
       } finally {
         if (mounted) setLoadingEtudiant(false);
       }
@@ -71,9 +89,8 @@ export default function DashboardView() {
     return () => { mounted = false; };
   }, [auth.userType, getMesDossiers]);
 
-  // Vue étudiant (pas de clignotement car on affiche toujours la dernière valeur)
+  // Vue étudiant
   if (auth.userType === 'ETUDIANT') {
-    // Si c'est le premier chargement (pas encore de données) et pas d'erreur, on montre le skeleton
     if (loadingEtudiant && mesDossiers.length === 0 && !errorEtudiant) {
       return (
         <div className="space-y-6">
@@ -87,11 +104,18 @@ export default function DashboardView() {
     }
     if (errorEtudiant) {
       return (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-          <p className="text-red-500">{errorEtudiant}</p>
-          <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Réessayer</Button>
-        </div>
+        <NetworkError
+          message={errorEtudiant}
+          onRetry={() => {
+            studentLoadedRef.current = false;
+            setLoadingEtudiant(true);
+            setErrorEtudiant(null);
+            getMesDossiers()
+              .then(setMesDossiers)
+              .catch(err => setErrorEtudiant(err.message))
+              .finally(() => setLoadingEtudiant(false));
+          }}
+        />
       );
     }
     return (
@@ -126,7 +150,7 @@ export default function DashboardView() {
     );
   }
 
-  // Vue établissement (inchangée)
+  // Vue établissement
   if (isFirstLoad) {
     return (
       <div className="space-y-6">
@@ -141,11 +165,10 @@ export default function DashboardView() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <p className="text-red-500">{error}</p>
-        <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Réessayer</Button>
-      </div>
+      <NetworkError
+        message={error}
+        onRetry={() => window.location.reload()}
+      />
     );
   }
 
@@ -196,7 +219,7 @@ export default function DashboardView() {
         <Card className="card-inner">
           <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" /> Répartition des dossiers</CardTitle></CardHeader>
           <CardContent>
-            <div className="w-full h-[300px]">
+            <div className="w-full h-[250px] md:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical" margin={{ left: 20 }}>
                   <XAxis type="number" />
