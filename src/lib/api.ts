@@ -15,10 +15,11 @@ async function request<T>(
   };
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
-    const json = await res.json();
-    if (!res.ok) {
-      const errorMsg = json.message || `Erreur ${res.status}`;
-      throw new Error(errorMsg);
+    const json: ApiResponse<T> = await res.json();
+
+    // Vérifier le statut HTTP ET le flag "success" du backend
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || 'Erreur serveur');
     }
     return json;
   } catch (err: any) {

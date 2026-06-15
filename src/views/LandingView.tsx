@@ -82,7 +82,7 @@ export default function LandingView() {
         </div>
       </div>
 
-      {/* Guide d'utilisation (étapes) */}
+      {/* Guide d'utilisation (étapes) – responsive avec défilement horizontal sur mobile */}
       <div className={cn(
         "container transition-all duration-500 overflow-hidden",
         showGuide ? "max-h-[800px] opacity-100 py-8" : "max-h-0 opacity-0 py-0"
@@ -91,16 +91,18 @@ export default function LandingView() {
           <h2 className="text-2xl font-bold text-center mb-6 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Comment ça marche ?
           </h2>
-          <div className="grid md:grid-cols-5 gap-4">
-            {steps.map((step, idx) => (
-              <div key={idx} className="text-center space-y-2">
-                <div className="w-16 h-16 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
-                  <step.icon className={cn("h-8 w-8", step.color)} />
+          <div className="overflow-x-auto pb-4">
+            <div className="flex md:grid md:grid-cols-5 gap-4 min-w-max md:min-w-0">
+              {steps.map((step, idx) => (
+                <div key={idx} className="text-center space-y-2 w-48 md:w-auto flex-shrink-0">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
+                    <step.icon className={cn("h-8 w-8", step.color)} />
+                  </div>
+                  <div className="font-semibold text-sm md:text-base">{step.title}</div>
+                  <p className="text-xs md:text-sm text-muted-foreground">{step.description}</p>
                 </div>
-                <div className="font-semibold">{step.title}</div>
-                <p className="text-sm text-muted-foreground">{step.description}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           <div className="mt-6 p-4 bg-primary/5 rounded-lg text-sm text-muted-foreground">
             <p className="font-medium text-foreground mb-2">📌 En résumé :</p>
@@ -111,6 +113,9 @@ export default function LandingView() {
               <li>L'université d'accueil se connecte, recherche l'étudiant par email et accepte le transfert.</li>
               <li>C'est fini ! L'étudiant peut être accueilli.</li>
             </ol>
+            <p className="mt-2 text-xs text-muted-foreground">
+              <span className="font-semibold">💡 À savoir :</span> L'étudiant doit d'abord créer son compte avec son adresse email sur la plateforme. Les établissements utiliseront exactement cet email pour lui créer un dossier.
+            </p>
           </div>
         </div>
       </div>
